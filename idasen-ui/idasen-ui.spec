@@ -4,7 +4,7 @@ block_cipher = None
 
 
 a = Analysis(['idasen-ui.py'],
-             pathex=['C:\\code\\git\\idasen-ui'],             
+             pathex=['d:\\Misc-Soft\\A5 - Private\\IdasenDesk\\idasen-ui\\idasen-ui'],             
              binaries=[],
              datas=[('*.png','.'),('*.ico','.')],
              hiddenimports=[],

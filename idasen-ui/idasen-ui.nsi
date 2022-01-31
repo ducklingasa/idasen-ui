@@ -11,11 +11,11 @@ Unicode True
 # show up in a few places.
 # All the other settings can be tweaked by editing the !defines at the top of this script
 !define APPNAME "Idasen Desk Control"
-!define REPONAME "Idasen-ui"
+!define REPONAME "idasen-ui"
 !define DESCRIPTION "Works with ikea IDASEN desk."
 # These three must be integers
 !define VERSIONMAJOR 1
-!define VERSIONMINOR 3
+!define VERSIONMINOR 4
 !define VERSIONBUILD 0
 # These will be displayed by the "Click here for support information" link in "Add/Remove Programs"
 # It is possible to use "mailto:" links in here to open the email client
@@ -86,10 +86,8 @@ section "install"
     file "..\Readme.html"
     file "..\Changelog.txt"
     
-    setOutPath $INSTDIR\bleak\backends\dotnet
-	file ".\dist\${REPONAME}\bleak\backends\dotnet\*.*"
-    setOutPath $INSTDIR\Include
-    file ".\dist\${REPONAME}\Include\*.h"
+    setOutPath $INSTDIR\bleak_winrt
+    file ".\dist\${REPONAME}\bleak_winrt\*.*"
     setOutPath $INSTDIR\wx
     file ".\dist\${REPONAME}\wx\*.*"
     setOutPath $INSTDIR
@@ -128,29 +126,24 @@ function un.onInit
 	next:
 	!insertmacro VerifyUserIsAdmin
 functionEnd
- 
+
 section "uninstall"
- 
+	
 	# Remove Start Menu launcher
 	delete "$SMPROGRAMS\${APPNAME}.lnk"
 	# Try to remove the Start Menu folder - this will only happen if it is empty
 	rmDir "$SMPROGRAMS\${APPNAME}"
- 
+	
 	# Remove files
-    delete $INSTDIR\Include\*.*
-    delete $INSTDIR\bleak\backends\dotnet\*.*
+    delete $INSTDIR\bleak_winrt\*.*
     delete $INSTDIR\wx\*.*
     delete $INSTDIR\*.*
 	
-	
 	# Try to remove the install directory - this will only happen if it is empty
-    rmDir $INSTDIR\Bleak\backends\dotnet  
-    rmDir $INSTDIR\Bleak\backends
-    rmDir $INSTDIR\Bleak
-    rmDir $INSTDIR\Include
-    rmDir $INSTDIR\wx      
+    rmDir $INSTDIR\bleak_winrt
+    rmDir $INSTDIR\wx
     rmDir $INSTDIR
- 
+	
 	# Remove uninstaller information from the registry
 	DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}"
 sectionEnd

@@ -1,5 +1,4 @@
 # IDASEN UI - DESK CONTROL
-# TODO: hotkey CTRL-1 and CTRL-2 http://www.blog.pythonlibrary.org/2010/12/02/wxpython-keyboard-shortcuts-accelerators/
 # TODO: implement 4 buttons version
 # TODO: Automove on schedule during a period 
 #       - between 9am to 5pm, 
@@ -8,6 +7,7 @@
 # TODO: right-click to menu
 #       - move window to other screen
 #       - enable/disable minimize to tray option
+
 import wx
 import wx.adv
 import wx.lib.agw.gradientbutton as GB
@@ -22,6 +22,7 @@ import os
 import yaml
 import time
 import clr
+import keyboard
 
 from bleak import BleakClient
 from bleak import discover
@@ -57,7 +58,7 @@ _DEFAULT_CONFIG = {
     "log_to_file": 0,
     "minimize_to_tray": 0,
 }
-      
+
 #==========================================================================
 # IdasenDesk class that works with bleak to connect to desk
 # height calculation offset in meters, assumed to be the same for all desks
@@ -251,9 +252,10 @@ class IdasenDesk:
         except Exception:
             return None
         return next(
-            (device.address for device in devices if device.name.startswith("Desk")),
+            (device.address for device in devices if "Desk" in device.name),
             None,
         )
+
 #==========================================================================
 # _DeskLoggingAdapter private class 
 #==========================================================================
@@ -263,7 +265,6 @@ class _DeskLoggingAdapter(logging.LoggerAdapter):
     def process(self, msg: str, kwargs: Dict[str, str]) -> Tuple[str, Dict[str, str]]:
         return f"[{self.extra['mac']}] {msg}", kwargs
 
-        
 #===============================================================
 # DeskWorkerThread class that executes processing
 # Running in distinct threat with a pseudo-realtime algo
@@ -420,9 +421,9 @@ class DeskWorkerThread(Thread):
             log(e)
             self.connected = False
             self.workerThread = False 
-            self._parent_window.showDisabledButton()
+            self._parent_window.ShowDisabledButton()
             sys.exit(1)
-        
+
 # ===============================================================================================
 # Taskbar icon that goes in system tray
 # ===============================================================================================
@@ -435,37 +436,42 @@ class CustomTaskBarIcon(wx.adv.TaskBarIcon):
         
         self.icon = wx.Icon()
         self.icon.CopyFromBitmap(wx.Bitmap("appicon.png", wx.BITMAP_TYPE_ANY))     
-        self.SetIcon(self.icon, "Restore")
+        self.SetIcon(self.icon, "Idasen - Desk Control")
         logging.debug('MyForm:_init_: appicon found')
 
         self.Bind(wx.adv.EVT_TASKBAR_LEFT_DOWN, self.OnTaskBarLeftClick)
-        
-        self.Bind(wx.adv.EVT_TASKBAR_RIGHT_UP, self.ShowMenu)  
+        self.Bind(wx.adv.EVT_TASKBAR_RIGHT_UP, self.ShowMenu)
+
+    def CreatePopupMenu(self):
         self.menu=wx.Menu()
         self.hideUnhideID = wx.ID_ANY
-        self.menu.Append(self.hideUnhideID, "Tray / Untray")  
+        self.menu.Append(self.hideUnhideID, "Tray / Untray")
         self.menu.AppendSeparator()
         self.movePos1ID = wx.ID_ANY+1
-        self.menu.Append(self.movePos1ID, "Move to position 1")  
+        self.menu.Append(self.movePos1ID, "Move to position 1")
+        self.menu
         self.movePos2ID = wx.ID_ANY+2
-        self.menu.Append(self.movePos2ID, "Move to position 2")  
+        self.menu.Append(self.movePos2ID, "Move to position 2")
         self.menu.AppendSeparator()
         self.exitID = wx.ID_ANY+3
-        self.menu.Append(self.exitID, "Exit")      
-         
+        self.menu.Append(self.exitID, "Exit")
+        
         self.Bind(wx.EVT_MENU, self.OnTaskBarLeftClick, id=self.hideUnhideID)
-        self.Bind(wx.EVT_MENU, self.frame.onBtn1Press, id=self.movePos1ID)   
-        self.Bind(wx.EVT_MENU, self.frame.onBtn2Press, id=self.movePos2ID)   
-        self.Bind(wx.EVT_MENU, self.OnTaskBarClose, id=self.exitID)        
+        self.Bind(wx.EVT_MENU, self.frame.OnBtn1Press, id=self.movePos1ID)
+        self.Bind(wx.EVT_MENU, self.frame.OnBtn2Press, id=self.movePos2ID)
+        self.Bind(wx.EVT_MENU, self.OnTaskBarClose, id=self.exitID)
+
+        return self.menu
  
     #----------------------------------------------------------------------
     def OnTaskBarActivate(self, evt):
         """"""
         pass
- 
-    def ShowMenu(self,event):  
-        self.PopupMenu(self.menu)  
- 
+
+    def ShowMenu(self,event):
+        log("ShowMenu")
+        self.PopupMenu(self.CreatePopupMenu())
+    
     #----------------------------------------------------------------------
     def OnTaskBarClose(self, evt):
         self.frame.Close()
@@ -484,13 +490,11 @@ class CustomTaskBarIcon(wx.adv.TaskBarIcon):
             else:
                 self.frame.Iconize()    
 
-            
-            
 # =============================================================================================
 # MyForm class is the main form
 # =============================================================================================
 class MyForm(wx.Frame):
- 
+
     #----------------------------------------------------------------------
     def __init__(self):
         size = wx.Size(465,85)
@@ -505,13 +509,12 @@ class MyForm(wx.Frame):
         if config["always_on_top"] == 1:
             self._popmenu._aotMenu.Check(True)
             self.SetWindowStyle(self.defaultstyle | wx.STAY_ON_TOP)
-
+        
         if config["minimize_to_tray"] == 1:
             self._popmenu._mttMenu.Check(True)
             self._minToTray = True
-                    
-              
-        self.tbIcon = CustomTaskBarIcon(self)        
+        
+        self.tbIcon = CustomTaskBarIcon(self)
         
         panel = wx.Panel(self, wx.ID_ANY)            
         panel.Bind(wx.EVT_RIGHT_DOWN, self.OnRightClick)        
@@ -519,10 +522,10 @@ class MyForm(wx.Frame):
         bmp = wx.Bitmap("bt-nc.png", wx.BITMAP_TYPE_ANY)          
         btsize = wx.Size(60,46)
         self.gbBluetoothBtn = GB.GradientButton(panel, bitmap=bmp, label="", size=btsize)                        
-        self.gbBluetoothBtn.Bind(wx.EVT_BUTTON, self.onBtBtnPress) 
+        self.gbBluetoothBtn.Bind(wx.EVT_BUTTON, self.OnBtBtnPress) 
         self.gbBluetoothBtn.Bind(wx.EVT_RIGHT_DOWN, self.OnRightClick)
         self.gbBluetoothBtn.SetToolTip(wx.ToolTip("Make sure desk is connected and paired to computer.\nPress Bluetooth button to discover desk."))                         
-                                  
+        
         self.gbHeightBtn = GB.GradientButton(panel, label="N/A")
         size = wx.Size(75,46)
         font = wx.Font(wx.FontInfo(24).FaceName("Arial").Bold())
@@ -533,38 +536,38 @@ class MyForm(wx.Frame):
 		
         bmp = wx.Bitmap("up-nc.png", wx.BITMAP_TYPE_ANY)
         self.gbUpBtn = GB.GradientButton(panel, bitmap=bmp, label="", size=btsize)        
-        self.gbUpBtn.Bind( wx.EVT_LEFT_DOWN, self.onBtnUpPress)
-        self.gbUpBtn.Bind( wx.EVT_LEFT_UP, self.onBtnUpRelease)
+        self.gbUpBtn.Bind( wx.EVT_LEFT_DOWN, self.OnBtnUpPress)
+        self.gbUpBtn.Bind( wx.EVT_LEFT_UP, self.OnBtnUpRelease)
         self.gbUpBtn.Bind(wx.EVT_RIGHT_DOWN, self.OnRightClick)
         self.gbUpBtn.Disable()
         
         bmp = wx.Bitmap("down-nc.png", wx.BITMAP_TYPE_ANY)
         self.gbDownBtn = GB.GradientButton(panel, bitmap=bmp, label="", size=btsize)
-        self.gbDownBtn.Bind( wx.EVT_LEFT_DOWN, self.onBtnDownPress)
-        self.gbDownBtn.Bind( wx.EVT_LEFT_UP, self.onBtnDownRelease)
+        self.gbDownBtn.Bind( wx.EVT_LEFT_DOWN, self.OnBtnDownPress)
+        self.gbDownBtn.Bind( wx.EVT_LEFT_UP, self.OnBtnDownRelease)
         self.gbDownBtn.Bind(wx.EVT_RIGHT_DOWN, self.OnRightClick)
         self.gbDownBtn.Disable()
         
         bmp = wx.Bitmap("pos1-nc.png", wx.BITMAP_TYPE_ANY)
         self.pos1Btn = GB.GradientButton(panel, bitmap=bmp, label="", size=btsize)
-        self.pos1Btn.Bind(wx.EVT_BUTTON, self.onBtn1Press)  
+        self.pos1Btn.Bind(wx.EVT_BUTTON, self.OnBtn1Press)  
         self.pos1Btn.Bind(wx.EVT_RIGHT_DOWN, self.OnRightClick)
         self.pos1Btn.Disable()       
 
         bmp = wx.Bitmap("pos2-nc.png", wx.BITMAP_TYPE_ANY)
         self.pos2Btn = GB.GradientButton(panel, bitmap=bmp, label="", size=btsize)
-        self.pos2Btn.Bind(wx.EVT_BUTTON, self.onBtn2Press)   
+        self.pos2Btn.Bind(wx.EVT_BUTTON, self.OnBtn2Press)   
         self.pos2Btn.Bind(wx.EVT_RIGHT_DOWN, self.OnRightClick)
         self.pos2Btn.Disable()       
 
         bmp = wx.Bitmap("m-nc.png", wx.BITMAP_TYPE_ANY)
         self.gbMBtn = GB.GradientButton(panel, bitmap=bmp, label="", size=btsize)
-        self.gbMBtn.Bind(wx.EVT_BUTTON, self.onBtnMemoryPress)
+        self.gbMBtn.Bind(wx.EVT_BUTTON, self.OnBtnMemoryPress)
         self.gbMBtn.Bind(wx.EVT_RIGHT_DOWN, self.OnRightClick)
         self.gbMBtn.Disable()
 
         self.Bind(wx.EVT_CLOSE, self.OnClose)
-        self.Bind(wx.EVT_ICONIZE, self.onMinimize)
+        self.Bind(wx.EVT_ICONIZE, self.OnMinimize)
         
         logging.debug('MyForm:_init_: all button created and bind')
         
@@ -579,7 +582,7 @@ class MyForm(wx.Frame):
         # Try to connect to Idasen desk based on previous saved config
         try:            
             if self.idasen_desk.connect():            
-                self.showConnectedButton()
+                self.ShowConnectedButton()
                 self.idasen_desk.start_running_loop()    
         except Exception as e:
             log("No saved config found")
@@ -596,9 +599,24 @@ class MyForm(wx.Frame):
         panel.SetSizer(sizer)
 
     #----------------------------------------------------------------------
+    def OnHotkeyOne(self, event):
+        logging.debug("You pressed CTRL + ALT + 1!")
+        if self.pos1Btn.Enabled:
+            self.OnBtn1Press(self)
+        else:
+            message_to_user("Desk is not connected, please connect from the app first.")
+        
+    def OnHotkeyTwo(self, event):
+        logging.debug("You pressed CTRL + ALT + 2!")
+        if self.pos2Btn.Enabled:
+            self.OnBtn2Press(self)
+        else:
+            message_to_user("Desk is not connected, please connect from the app first.")
+        
+    #----------------------------------------------------------------------
     def OnRightClick(self, e): 
         # sow popu menu 
-        log("OnRightClick")              
+        log("OnRightClick")
         self.PopupMenu(self._popmenu, e.GetPosition()) 
         
     def OnClose(self, event):
@@ -608,96 +626,93 @@ class MyForm(wx.Frame):
         self.tbIcon.Destroy()
         event.Skip()
         
-    def onMinimize(self, event):
+    def OnMinimize(self, event):
         if self._minToTray == True:
             if self.IsIconized():
                 self.Hide()
         else:
             event.Skip()
             
-    def showDisabledButton(self):                
+    def ShowDisabledButton(self):
         self.gbBluetoothBtn.SetBitmapLabel(wx.Bitmap("bt-nc.png", wx.BITMAP_TYPE_ANY))
         self.gbBluetoothBtn.Enable()
         self.gbHeightBtn.SetLabel("N/A")
         self.gbHeightBtn.Refresh() 
         self.gbUpBtn.SetBitmapLabel(wx.Bitmap("up-nc.png", wx.BITMAP_TYPE_ANY))        
-        self.gbUpBtn.Disable()        
+        self.gbUpBtn.Disable()
         self.gbDownBtn.SetBitmapLabel(wx.Bitmap("down-nc.png", wx.BITMAP_TYPE_ANY))
-        self.gbDownBtn.Disable()        
+        self.gbDownBtn.Disable()
         self.pos1Btn.SetBitmapLabel(wx.Bitmap("pos1-nc.png", wx.BITMAP_TYPE_ANY))
-        self.pos1Btn.Disable()               
+        self.pos1Btn.Disable()
         self.pos2Btn.SetBitmapLabel(wx.Bitmap("pos2-nc.png", wx.BITMAP_TYPE_ANY))
-        self.pos2Btn.Disable()               
+        self.pos2Btn.Disable()
         self.gbMBtn.SetBitmapLabel(wx.Bitmap("m-nc.png", wx.BITMAP_TYPE_ANY))
-        self.gbMBtn.Disable()        
+        self.gbMBtn.Disable()
 
-    def showConnectedButton(self):        
+    def ShowConnectedButton(self):
         self.gbBluetoothBtn.SetBitmapLabel(wx.Bitmap("bt.png", wx.BITMAP_TYPE_ANY))
         self.gbBluetoothBtn.Disable()
         self.gbUpBtn.SetBitmapLabel(wx.Bitmap("up.png", wx.BITMAP_TYPE_ANY))        
-        self.gbUpBtn.Enable()        
+        self.gbUpBtn.Enable()
         self.gbDownBtn.SetBitmapLabel(wx.Bitmap("down.png", wx.BITMAP_TYPE_ANY))
-        self.gbDownBtn.Enable()        
+        self.gbDownBtn.Enable()
         self.pos1Btn.SetBitmapLabel(wx.Bitmap("pos1.png", wx.BITMAP_TYPE_ANY))
-        self.pos1Btn.Enable()               
+        self.pos1Btn.Enable()
         self.pos2Btn.SetBitmapLabel(wx.Bitmap("pos2.png", wx.BITMAP_TYPE_ANY))
-        self.pos2Btn.Enable()               
+        self.pos2Btn.Enable()
         self.gbMBtn.SetBitmapLabel(wx.Bitmap("m.png", wx.BITMAP_TYPE_ANY))
         self.gbMBtn.Enable()
         
-        
-    def onBtBtnPress(self, event):
+    def OnBtBtnPress(self, event):
         """"""        
         log("BT button pressed! Trying to discover_desk...")
         if asyncio.run(discover_desk()):
             log("Desk found, trying to connect...")
             if self.idasen_desk.connect():
                 log("Desk connected! Enabling and starting running loop...")
-                self.showConnectedButton()
+                self.ShowConnectedButton()
                 self.idasen_desk.start_running_loop()
             else:
                 log("Desk found but cannot connect to it.")
         else:
-            message_to_user("Unable discover desk from Bluetooth devices.\nMake sure desk is connected and paired to the computer.")
+            message_to_user("Unable to discover desk from Bluetooth devices.\nMake sure desk is connected and paired to the computer.")
 
-    def onBtnUpPress(self, event):
+    def OnBtnUpPress(self, event):
         """"""
         self.buttonUpPressed = True
         
-    def onBtnUpRelease(self, event):
+    def OnBtnUpRelease(self, event):
         """"""
         self.buttonUpPressed = False
         
-    def onBtnDownPress(self, event):
+    def OnBtnDownPress(self, event):
         """"""
         self.buttonDownPressed = True
         
-    def onBtnDownRelease(self, event):
+    def OnBtnDownRelease(self, event):
         """"""
         self.buttonDownPressed = False  
 
-    def onBtn1Press(self, event):
+    def OnBtn1Press(self, event):
         """"""
         if self.buttonMemoryPressed:
-            self.disableSavePosition()
-            self.saveCurrentHeightInConfig("pos1")
+            self.DisableSavePosition()
+            self.SaveCurrentHeightInConfig("pos1")
         else:        
             self.idasen_desk.move_to_height(config["positions"]["pos1"])
         
-        
-    def onBtn2Press(self, event):
+    def OnBtn2Press(self, event):
         """"""
         if self.buttonMemoryPressed:
-            self.disableSavePosition()
-            self.saveCurrentHeightInConfig("pos2")
+            self.DisableSavePosition()
+            self.SaveCurrentHeightInConfig("pos2")
         else:
             self.idasen_desk.move_to_height(config["positions"]["pos2"])
         
-        
-    def onBtnMemoryPress(self, event):
+    def OnBtnMemoryPress(self, event):
         """"""
         if self.buttonMemoryPressed:
-            self.disableSavePosition()
+            self.DisableSavePosition()
         else:
             self.buttonMemoryPressed = True
             bmp = wx.Bitmap("pos1-h.png", wx.BITMAP_TYPE_ANY)
@@ -707,12 +722,12 @@ class MyForm(wx.Frame):
             self.gbUpBtn.Disable()
             self.gbDownBtn.Disable()        
 
-    def saveCurrentHeightInConfig(self,savePos):
+    def SaveCurrentHeightInConfig(self,savePos):
         config = load_config()
         config["positions"][savePos] = self.idasen_desk.current_height
         save_config(config)
-    
-    def disableSavePosition(self):
+
+    def DisableSavePosition(self):
         self.buttonMemoryPressed = False
         bmp = wx.Bitmap("pos1.png", wx.BITMAP_TYPE_ANY)
         self.pos1Btn.SetBitmapLabel(bmp)
@@ -728,20 +743,19 @@ class PopMenu(wx.Menu):
     def __init__(self, parent): 
         super(PopMenu, self).__init__() 
         self.parent = parent 
-  
+
         # menu item 1         
         self._aotMenu = self.Append(wx.ID_ANY, 'Always on top', kind=wx.ITEM_CHECK) 
         self.Bind(wx.EVT_MENU, self.ToggleAlwaysOnTop, self._aotMenu)
-                
+        
         # menu item 2 
         self._mttMenu = self.Append(wx.ID_ANY, "Minimize to tray instead of taskbar", kind=wx.ITEM_CHECK) 
         self.Bind(wx.EVT_MENU, self.ToggleMinimizeToTray, self._mttMenu)
 
         # menu item 3
         #popmenu = wx.MenuItem(self, wx.ID_ANY, "Activate ...") 
-        #self.Append(popmenu) 
+        #self.Append(popmenu)
 
-       
     def ToggleAlwaysOnTop(self, e):
         log("ToggleAlwaysOnTop")
                 
@@ -778,7 +792,6 @@ class PopMenu(wx.Menu):
         config["minimize_to_tray"] = minToTray
         save_config(config)                 
         
-    
 # =============================================================================================
 # =============================================================================================
 # Global function...
@@ -800,18 +813,18 @@ CONFIG_SCHEMA = vol.Schema(
     },
     extra=False,
 )
-       
+
 def log(msg):
     if _LOG_TO_CONSOLE:
         print(msg)
     else:
         logging.info(msg)
-            
+    
 def message_to_user(msg):
-        dlg = wx.MessageDialog(None, msg, "Message", wx.OK|wx.ICON_EXCLAMATION)
-        dlg.ShowModal()
-        dlg.Destroy()        
-                     
+    dlg = wx.MessageDialog(None, msg, "Message", wx.OK|wx.ICON_EXCLAMATION)
+    dlg.ShowModal()
+    dlg.Destroy()        
+    
 def align_bottom_right(win):
     dw, dh = wx.DisplaySize()
     w, h = win.GetSize()
@@ -823,8 +836,7 @@ def save_config(config: dict, path: str = _IDASEN_CONFIG_PATH):
     os.makedirs(_IDASEN_CONFIG_DIRECTORY, exist_ok=True)    
     with open(path, "w") as f:
         yaml.dump(config, f)
-
-
+    
 def load_config(path: str = _IDASEN_CONFIG_PATH) -> dict:
     """ Load user config. """    
     print(f"Loading config from: {path}")
@@ -856,7 +868,7 @@ def load_config(path: str = _IDASEN_CONFIG_PATH) -> dict:
         message_to_user(f"Invalid configuration: {e}", file=sys.stderr)
         
     return config
-        
+    
 async def discover_desk() -> bool:
     mac = await IdasenDesk.discover()
     global config
@@ -876,7 +888,6 @@ async def discover_desk() -> bool:
         return True
     else:
         return False
-
 
 def _bytes_to_meters(raw: bytearray) -> float:
     """ Converts a value read from the desk in bytes to meters. """
@@ -911,5 +922,8 @@ if __name__ == "__main__":
     logging.debug('Main Form created')
     align_bottom_right(frame)    
     frame.Show()
+    logging.debug('Main Defining global hotkeys')
+    keyboard.add_hotkey('ctrl+alt+1', frame.OnHotkeyOne, args=([wx.wxEVT_NULL]))
+    keyboard.add_hotkey('ctrl+alt+2', frame.OnHotkeyTwo, args=([wx.wxEVT_NULL]))
     logging.debug('Main Starting MainLoop')
     app.MainLoop()

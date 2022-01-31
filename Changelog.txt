@@ -1,9 +1,12 @@
+= Release 1.4.0 =
+    * Added hotkey CTRL+ALT+1 and CTRL+ALT+2
+
 = Release 1.3.0 =
     * Changed application installation to NSIS installer
     * Added shortcut in Windows Start Menu
     * Added uninstall option in registry settings
     * Fixed .NET Framework UAC security issue
-    
+
 = Release 1.2.1 =
     * Added minimize to tray option    
     * Added right-click menu to control tray option
@@ -13,11 +16,11 @@
     * Fixed python installer issue
     * Fixed loading issue reported by some users
     * Changed log_to_file approach to overwrite log file instead of appending
-    
+
 = Release 1.1.1 =
     * Added log_to_file setting in configuration
     * Added debug trace to investigate issue reported by user.
-    
+
 = Release 1.1.0 =
     * Added right-click menu with Always-On-Top window
     * Added Always-On-Top setting in configuration
